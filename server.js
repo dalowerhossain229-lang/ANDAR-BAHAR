@@ -25,7 +25,7 @@ app.use((req, res, next) => {
 });
 
 // 🎰 [উইনগো কালার ট্রেড ওরিজিনাল ডোমেইন সিঙ্ক ভাই ভাই]
-const MAIN_SITE_URL = "https://onrender.com"; 
+const MAIN_SITE_URL = "https://betlover247.onrender.com"; 
 
 // 🃏 ওরিজিনাল ইন্টারন্যাশনাল কার্ড সুটস এবং র‍্যাঙ্ক পুল
 const cardSuitsPool = ["HEARTS", "DIAMONDS", "CLUBS", "SPADES"];
