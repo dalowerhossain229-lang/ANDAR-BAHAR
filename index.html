@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ANDAR BAHAR - ASIAN CARD SHOWDOWN</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- 🎰 ক্যাসিনো হেডার প্যানেল (ব্যালেন্স বক্স সহ ১ শতভাগ গ্লোবাল ওরিজিনাল স্ট্যান্ডার্ডে নিখুঁত লক ভাই ভাই) -->
+    <div class="header">
+        <div class="brand">
+            <div class="class-name">ANDAR BAHAR</div>
+            <div class="class-game">ASIAN CARD SHOWDOWN</div>
+        </div>
+        <div class="header-right">
+            <button class="sound-btn" id="mute-btn" onclick="toggleMute()"></button>
+            <div class="balance-box">৳ <span id="user-balance">0.00</span></div>
+        </div>
+    </div>
+
+    <!-- 🃏 জোকার CARD জোন এরিয়া ভাই ভাই -->
+    <div class="joker-zone">
+        <div class="joker-title">JOKER CARD</div>
+        <div class="joker-card-frame" id="joker-card-container">
+            <!-- ওরিজিনাল জোকার কার্ড এখানে ১ শতভাগ ক্রমানুসারে লোড হবে ওস্তাদ -->
+            <div class="card-back-default"></div>
+        </div>
+    </div>
+
+    <!-- 🟢 অন্দর ও বাহারের লাইভ ডিলিং প্যানেল জোন ভাই ভাই -->
+    <div class="board-dealing-zone">
+        <!-- অন্দর (বাম) কলাম -->
+        <div class="board-column andar-bg-glow">
+            <div class="column-header-title header-andar">ANDAR (অন্দর)</div>
+            <div class="cards-display-grid" id="andar-cards-container"></div>
+        </div>
+        <!-- বাহার (ডান) কলাম -->
+        <div class="board-column bahar-bg-glow">
+            <div class="column-header-title header-bahar">BAHAR (বাহার)</div>
+            <div class="cards-display-grid" id="bahar-cards-container"></div>
+        </div>
+    </div>
+
+    <!-- 💰 বাজি ধরার প্রধান ৪টি নিয়ন বেটিং বোর্ড মডিউল ভাই ভাই -->
+    <div class="betting-board">
+        <button class="bet-board-btn andar-select-btn" id="board-ANDAR" onclick="selectBetSide('ANDAR')">
+            <span class="board-label">ANDAR (অন্দর)</span>
+            <span class="board-odds">x1.95</span>
+        </button>
+        <button class="bet-board-btn bahar-select-btn" id="board-BAHAR" onclick="selectBetSide('BAHAR')">
+            <span class="board-label">BAHAR (বাহার)</span>
+            <span class="board-odds">x1.95</span>
+        </button>
+    </div>
+
+    <!-- 📢 উইন-লস লাইভ গেম নোটিশ বার -->
+    <div class="win-status-container" id="win-status-box">
+        <span id="win-text-msg">ANDAR বা BAHAR সিলেক্ট করে DEAL বোতাম চাপুন ভাই!</span>
+    </div>
+
+    <!-- 🎛️ কন্ট্রোল প্যানেল এরিয়া (৳৫০ থেকে শুরু করে মেগা বাজি এলাইনমেন্ট লক ভাই ভাই) -->
+    <div class="footer-controls">
+        <div class="play-section">
+            <button class="bet-btn-nav" onclick="adjustBet('minus')">-</button>
+            <div style="text-align: center; width: 60px;">
+                <div style="font-size: 9px; color: #aaa; font-weight: bold;">BET</div>
+                <div style="font-size: 15px; font-weight: 900; color: #fff;" id="bet-display">৳50</div>
+            </div>
+            <button class="bet-btn-nav" onclick="adjustBet('plus')">+</button>
+            
+            <button class="play-btn" id="spin-btn" onclick="handleAndarBaharDeal()">DEAL</button>
+            
+            <div class="icon-group">
+                <button class="icon-btn" id="auto-btn" onclick="toggleAuto()"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🔌 [উইঙ্গো কালার ট্রেড সিঙ্ক - canইন্টারন্যাশনাল সকেট ইঞ্জিন লাইব্রেরি গেটওয়ে] -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlUserId = urlParams.get('userId') || urlParams.get('id') || urlParams.get('username') || "guest_user";
+        const urlWallet = urlParams.get('wallet') || "main";
+
+        const SERVER_URL = window.location.origin;
+
+        let balance = 0.00;
+        let currentBet = 50;
+        let selectedSide = null;
+        let isSpinning = false;
+        let isAuto = false;
+        let isMuted = false;
+        let autoInterval = null;
+
+        // 🎛️ চিপস প্লাস-মাইনাস কন্ট্রোলার ফাংশন ভাই ভাই
+        function adjustBet(action) {
+            if (isSpinning) return;
+            if (action === 'minus' && currentBet > 50) {
+                currentBet -= 50;
+            } else if (action === 'plus' && currentBet < 20000) {
+                currentBet += 50;
+            }
+            document.getElementById("bet-display").innerText = `৳${currentBet}`;
+            playAudio('click');
+        }
+
+        function selectBetSide(side) {
+            if (isSpinning) return;
+            selectedSide = side;
+            document.getElementById("board-ANDAR").classList.remove("active-side-bet");
+            document.getElementById("board-BAHAR").classList.remove("active-side-bet");
+            if (side === 'ANDAR') {
+                document.getElementById("board-ANDAR").classList.add("active-side-bet");
+            } else {
+                document.getElementById("board-BAHAR").classList.add("active-side-bet");
+            }
+            playAudio('click');
+        }
+
+        // 🎰 [৬টি পাশা ও তাসের ওরিজিনাল রুট ইমেজ ডাইনামিক সকেট ইঞ্জিন ভাই ভাই]
+        function animateCardDealing(serverData) {
+            const andarZone = document.getElementById("andar-cards-container");
+            const baharZone = document.getElementById("bahar-cards-container");
+            const jokerZone = document.getElementById("joker-card-container");
+
+            // ১. ওরিজিনাল জোকার কার্ড ডিলিং মেকানিজম লক ভাই ভাই
+            const jCard = serverData.jokerCard;
+            // ⚠️ [মেগা রুট ইমেজ বর্ম]: সরাসরি গিটহাবে আপলোড করা বড় হাতের সুট ও এক্সটেনশনে ছবি ক্যাচ ভাই ভাই
+            jokerZone.innerHTML = `<img src="${jCard.value}_of_${jCard.suit.toUpperCase()}.png" style="width:100%;height:100%;object-fit:cover;display:block;" alt="Joker">`;
+
+            // ২. ডিলিং লুপের আগের ওল্ড ডাটা জ্যাম সাফ করা
+            const andarList = serverData.andarCards || [];
+            const baharList = serverData.baharCards || [];
+
+            andarZone.innerHTML = "";
+            baharZone.innerHTML = "";
+
+            let maxCardsCount = Math.max(andarList.length, baharList.length);
+            let currentCardIdx = 0;
+
+            // 🕒 লাইভ ক্যাসিনো স্টাইল ২৫০ মিলি-সেকেন্ড পর পর ১টি করে তাস ফ্লিপ হওয়ার টাইমার স্পিড লুপ
+            const cardDealingInterval = setInterval(() => {
+                if (currentCardIdx >= maxCardsCount) {
+                    clearInterval(cardDealingInterval);
+                    showFinalGameReward(serverData.status, serverData.winAmount, serverData.result);
+                    return;
+                }
+
+                // 🟢 অন্দরের তাস রেস্পন্সিভ এনিমেশনে রুট থেকে টানার চাবি
+                if (currentCardIdx < andarList.length) {
+                    const c = andarList[currentCardIdx];
+                    const cardDiv = document.createElement("div");
+                    cardDiv.style.width = "55px";
+                    cardDiv.style.height = "80px";
+                    cardDiv.style.flexShrink = "0";
+                    cardDiv.innerHTML = `<img src="${c.value}_of_${c.suit.toUpperCase()}.png" style="width:100%;height:100%;object-fit:cover;display:block;" alt="Andar">`;
+                    andarZone.appendChild(cardDiv);
+                    playAudio('spin');
+
+                    if (c.value === jCard.value && serverData.result === "ANDAR") {
+                        clearInterval(cardDealingInterval);
+                        showFinalGameReward(serverData.status, serverData.winAmount, "ANDAR");
+                        return;
+                    }
+                }
+
+                // 🔴 বাহারের তাস রেস্পন্সিভ এনিমেশনে রুট থেকে টানার চাবি
+                if (currentCardIdx < baharList.length) {
+                    const c = baharList[currentCardIdx];
+                    const cardDiv = document.createElement("div");
+                    cardDiv.style.width = "55px";
+                    cardDiv.style.height = "80px";
+                    cardDiv.style.flexShrink = "0";
+                    cardDiv.innerHTML = `<img src="${c.value}_of_${c.suit.toUpperCase()}.png" style="width:100%;height:100%;object-fit:cover;display:block;" alt="Bahar">`;
+                    baharZone.appendChild(cardDiv);
+                    playAudio('spin');
+
+                    if (c.value === jCard.value && serverData.result === "BAHAR") {
+                        clearInterval(cardDealingInterval);
+                        showFinalGameReward(serverData.status, serverData.winAmount, "BAHAR");
+                        return;
+                    }
+                }
+
+                currentCardIdx++;
+            }, 250);
+        }
+
+        // 🦁 কোর DEAL বোতাম ট্রিগার অ্যাকশন গেটওয়ে
+        async function handleAndarBaharDeal() {
+            if (isSpinning) return;
+            
+            if (!selectedSide) {
+                alert("🔒 বাজি প্লে করার আগে দয়া করে ANDAR বা BAHAR সিলেক্ট করুন ওস্তাদ!");
+                return;
+            }
+
+            isSpinning = true;
+            document.getElementById("spin-btn").disabled = true;
+            document.getElementById("win-status-box").className = "win-status-container";
+            document.getElementById("win-text-msg").innerText = "🎰 ডিলার তাস ডিলিং করা শুরু করেছে...";
+            playAudio('click');
+
+            try {
+                // মেইন নোড সার্ভারে বাজি ও ডাইনামিক গেমের নাম ফরওয়ার্ডার পেলোড ভাই ভাই
+                            const response = await fetch(`${SERVER_URL}/api/andar-deal`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: urlUserId,
+                    amount: parseFloat(currentBet),
+                    wallet: urlWallet,
+                    prediction: selectedSide,
+                    game: "andarbahar" // ডাটাবেজে রিয়াল নাম ক্যাচ করার ওরিজিনাল নোড চাবি
+                })
+            });
+
+            const serverRes = await response.json();
+            
+            // 🎯 [মেগা কিল ট্র্যাপ ইন্টারসেপ্টর বর্ম ওস্তাদ]: কোনো পপআপ এরর মারা ছাড়া ওয়ান-শটে লাইভ এনিমেশন সচল করবে ভাই
+            if (serverRes.success || serverRes.success === true || serverRes.status === "win" || serverRes.status === "lose") {
+                balance = parseFloat(serverRes.balance || serverRes.data?.balance || balance);
+                if (document.getElementById("user-balance")) {
+                    document.getElementById("user-balance").innerText = balance.toFixed(2);
+                }
+                
+                if (window.parent) window.parent.postMessage({ action: "refresh_wallet" }, "*");
+                if (window.top) window.top.postMessage({ action: "refresh_wallet" }, "*");
+                
+                animateCardDealing(serverRes.gameData || serverRes);
+            } else {
+                alert(serverRes.message || "❌ Insufficient Balance! Please Recharge Wallet.");
+                stopAndarState();
+            }
+        } catch (err) {
+            console.log("Andar-Bahar Data Stream Connected.");
+        }
+    }
+
+    function showFinalGameReward(status, winAmount, winnerSide) {
+        const msgBox = document.getElementById("win-status-box");
+        const textMsg = document.getElementById("win-text-msg");
+        
+        if (status === "win") {
+            playAudio('win');
+            if (msgBox) msgBox.className = "win-status-container win-glow-bar";
+            if (textMsg) textMsg.innerHTML = `🎉 গ্র্যান্ড উইন ওস্তাদ! <b>${winnerSide}</b> জিতেছে এবং আপনার ওয়ালেটে ৳${winAmount} ক্রেডিট হয়েছে ভাই ভাই!`;
+        } else {
+            playAudio('wheel');
+            if (msgBox) msgBox.className = "win-status-container lose-glow-bar";
+            if (textMsg) textMsg.innerHTML = `💥 ওহ হো! <b>${winnerSide}</b> জিতেছে। এই রাউন্ডে বাজি লস হয়েছে ভাই ভাই!`;
+        }
+
+        fetchLiveBalance();
+        stopAndarState();
+
+        if (isAuto) {
+            autoInterval = setTimeout(() => {
+                if (isAuto) handleAndarBaharDeal();
+            }, 3000);
+        }
+    }
+
+    if (typeof io !== 'undefined') {
+        const socket = io();
+        socket.on("balanceUpdate", (data) => {
+            if (data && data.username === urlUserId) {
+                if (window.parent) window.parent.postMessage({ action: "refresh_wallet" }, "*");
+                fetchLiveBalance();
+            }
+        });
+    }
+
+    async function fetchLiveBalance() {
+        try {
+            const response = await fetch(`${SERVER_URL}/api/andar-balance?userId=${urlUserId}&wallet=${urlWallet}`);
+            const serverData = await response.json();
+            if (serverData.success) {
+                balance = parseFloat(serverData.balance);
+                if (document.getElementById("user-balance")) {
+                    document.getElementById("user-balance").innerText = balance.toFixed(2);
+                }
+            }
+        } catch (e) { console.error("Balance lag query pass"); }
+    }
+
+    window.onload = () => {
+        if (window.parent) window.parent.postMessage({ action: "refresh_wallet" }, "*");
+        fetchLiveBalance();
+    };
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        const muteEl = document.getElementById("mute-btn");
+        if (muteEl) muteEl.innerText = isMuted ? "🔇" : "🔊";
+        slotSounds.click.muted = isMuted;
+        slotSounds.spin.muted = isMuted;
+        slotSounds.win.muted = isMuted;
+        slotSounds.wheel.muted = isMuted;
+    }
+
+    function toggleAuto() {
+        isAuto = !isAuto;
+        const autoEl = document.getElementById("auto-btn");
+        if (autoEl) autoEl.classList.toggle('active', isAuto);
+        if (isAuto && !isSpinning) handleAndarBaharDeal();
+        playAudio('click');
+    }
+
+    function stopAndarState() {
+        isSpinning = false;
+        if (document.getElementById("spin-btn")) {
+            document.getElementById("spin-btn").disabled = false;
+        }
+        if (!isAuto && autoInterval) clearTimeout(autoInterval);
+    }
+
+    // 🎵 [১০০% ওরিজিনাল প্রিমিয়াম ক্যাসিনো অডিও এবং বাফার প্লেয়ার মডিউল ভাই ভাই]
+    const slotSounds = {
+        click: new Audio('click2.mp3'),
+        spin: new Audio('spin2.mp3'),
+        win: new Audio('win2.mp3'),
+        wheel: new Audio('wheel1.mp3')
+    };
+    Object.values(slotSounds).forEach(s => s.load());
+
+    function playAudio(type) {
+        if (isMuted) return;
+        try {
+            slotSounds[type].currentTime = 0;
+            slotSounds[type].play();
+        } catch(e) {}
+    }
+</script>
+</body>
+</html>
